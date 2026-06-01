@@ -1,0 +1,91 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo
+        options: >-
+          --health-cmd mongosh
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.9
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install -r requirements-dev.txt
+    
+    - name: Lint with flake8
+      run: |
+        flake8 *.py --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 *.py --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Format check with black
+      run: |
+        black --check *.py || true
+    
+    - name: Test configuration
+      run: |
+        python test_config.py
+      env:
+        API_ID: 123456
+        API_HASH: test_hash
+        BOT_TOKEN: test_token
+        OWNER_ID: 123456789
+        MONGO_DB_URI: mongodb://localhost:27017
+
+  build-docker:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Build Docker image
+      run: docker build -t music_bot:latest .
+    
+    - name: Test Docker image
+      run: |
+        docker run --rm music_bot:latest python -c "import bot; print('✅ Bot imports successfully')"
+
+  security-scan:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Run Bandit security scan
+      run: |
+        pip install bandit
+        bandit -r *.py || true
+    
+    - name: Check for secrets
+      run: |
+        pip install detect-secrets
+        detect-secrets scan *.py || true

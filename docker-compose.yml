@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: music_bot_mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+    restart: always
+
+  music_bot:
+    build: .
+    container_name: music_bot
+    depends_on:
+      - mongodb
+    environment:
+      - API_ID=${API_ID}
+      - API_HASH=${API_HASH}
+      - BOT_TOKEN=${BOT_TOKEN}
+      - ASSISTANT_ACCOUNT=${ASSISTANT_ACCOUNT}
+      - MONGO_DB_URI=mongodb://root:password@mongodb:27017
+      - DB_NAME=${DB_NAME}
+      - OWNER_ID=${OWNER_ID}
+      - ADMIN_IDS=${ADMIN_IDS}
+    volumes:
+      - ./downloads:/app/downloads
+      - ./logs:/app/logs
+      - ./.env:/app/.env
+    restart: always
+    networks:
+      - music_bot_network
+
+volumes:
+  mongodb_data:
+
+networks:
+  music_bot_network:
+    driver: bridge
